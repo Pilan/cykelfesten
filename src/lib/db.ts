@@ -6,7 +6,7 @@ let db: Database.Database | null = null;
 
 function getDb(): Database.Database {
   if (!db) {
-    const dbPath = path.join(process.cwd(), 'cykelfesten.db');
+    const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'cykelfesten.db');
     db = new Database(dbPath);
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
