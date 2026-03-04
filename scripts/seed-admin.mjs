@@ -10,8 +10,8 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'cykelfesten.db');
 
-const EMAIL = 'admin@cykelfesten.site';
-const PASSWORD = 'tripadmin123';
+const EMAIL = process.env.ADMIN_EMAIL || 'admin@cykelfesten.site';
+const PASSWORD = process.env.ADMIN_PASSWORD || 'tripadmin123';
 
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
