@@ -55,6 +55,14 @@ function initSchema(database: Database.Database): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      key TEXT NOT NULL,
+      body TEXT NOT NULL,
+      UNIQUE(event_id, key)
+    );
+
     CREATE TABLE IF NOT EXISTS assignments (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
@@ -75,6 +83,13 @@ function initSchema(database: Database.Database): void {
 // Run ALTER TABLE for existing databases missing new columns
 function migrateSchema(database: Database.Database): void {
   const migrations = [
+    `CREATE TABLE IF NOT EXISTS templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      key TEXT NOT NULL,
+      body TEXT NOT NULL,
+      UNIQUE(event_id, key)
+    )`,
     'ALTER TABLE admins ADD COLUMN email TEXT',
     'ALTER TABLE admins ADD COLUMN email_verified INTEGER DEFAULT 0',
     'ALTER TABLE admins ADD COLUMN verification_token TEXT',
@@ -88,6 +103,40 @@ function migrateSchema(database: Database.Database): void {
       // Column already exists – ignore
     }
   }
+}
+
+// ── Templates ────────────────────────────────────────────────────────────────
+
+export const DEFAULT_TEMPLATES: Record<string, string> = {
+  sms_advance:
+    '[Cykelfesten {{datum}}] Du/ni serverar {{rätt}} hemma kl {{tid}}. Ni tar emot {{antal_gäster}} gästpersoner.{{specialkost}} Mer info kommer dagen för festen!',
+  sms_host:
+    '[Cykelfesten] Du/ni är hemma och tar emot gäster för {{rätt}} kl {{tid}}. Välkommen!',
+  sms_guest:
+    '[Cykelfesten] Cykla till {{adress}} för {{rätt}} kl {{tid}}!',
+  email_subject:
+    'Anmälningsbekräftelse – {{event_titel}}',
+  email_body:
+    'Tack för er anmälan till {{event_titel}} den {{datum}}!\n\nAnmälda: {{namn}}\nEr adress: {{adress}}\nPlats: {{plats}}\nExtra platser ni kan ta emot: {{platser}} gäster{{specialkost}}\n\nVi återkommer med mer information om vilken rätt ni serverar och vilka hushåll ni besöker.\n\nVälkommen på cykelfest! 🚴‍♀️',
+};
+
+export function getEventTemplates(eventId: number): Record<string, string> {
+  const rows = getDb()
+    .prepare('SELECT key, body FROM templates WHERE event_id = ?')
+    .all(eventId) as Array<{ key: string; body: string }>;
+  const result = { ...DEFAULT_TEMPLATES };
+  for (const row of rows) {
+    result[row.key] = row.body;
+  }
+  return result;
+}
+
+export function saveTemplate(eventId: number, key: string, body: string): void {
+  getDb()
+    .prepare(
+      'INSERT INTO templates (event_id, key, body) VALUES (?, ?, ?) ON CONFLICT(event_id, key) DO UPDATE SET body = excluded.body'
+    )
+    .run(eventId, key, body);
 }
 
 // ── Admin ────────────────────────────────────────────────────────────────────

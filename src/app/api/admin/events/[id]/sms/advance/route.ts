@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getEventForAdmin, getHouseholds, getAssignments, markSmsSent } from '@/lib/db';
+import { getEventForAdmin, getHouseholds, getAssignments, markSmsSent, getEventTemplates } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { sendAdvanceSms } from '@/lib/sms';
 
@@ -19,6 +19,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ error: 'Lottning ej genomförd.' }, { status: 400 });
     }
 
+    const templates = getEventTemplates(eventId);
     const householdMap = new Map(households.map((h) => [h.id, h]));
     const courseTime = {
       starter: event.starter_time,
@@ -26,9 +27,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
       dessert: event.dessert_time,
     };
 
-    // For each host: count visiting people and collect dietary info per course
-    const visitorPeople = new Map<string, number>();   // key: `${hostId}-${course}`
-    const visitorDietary = new Map<string, string[]>(); // key: `${hostId}-${course}`
+    const visitorPeople = new Map<string, number>();
+    const visitorDietary = new Map<string, string[]>();
     for (const a of assignments) {
       const visitor = householdMap.get(a.household_id);
       if (!visitor) continue;
@@ -59,7 +59,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
         const guestCount = visitorPeople.get(key) ?? 0;
         const dietaryList = visitorDietary.get(key) ?? [];
         try {
-          await sendAdvanceSms(h.phone, event.date, a.course, courseTime[a.course], guestCount, dietaryList);
+          await sendAdvanceSms(h.phone, event.date, a.course, courseTime[a.course], guestCount, dietaryList, templates.sms_advance);
         } catch (err) {
           errors.push(`Hushåll ${a.household_id}: ${err}`);
         }

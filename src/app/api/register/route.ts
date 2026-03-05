@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getEvent, createHousehold } from '@/lib/db';
+import { getEvent, createHousehold, getEventTemplates } from '@/lib/db';
 import { sendConfirmationEmail } from '@/lib/email';
 
 export async function POST(req: NextRequest) {
@@ -28,8 +28,9 @@ export async function POST(req: NextRequest) {
     });
 
     // Send confirmation email (non-blocking - don't fail registration if email fails)
-    sendConfirmationEmail(event, household).catch((err) =>
-      console.error('Failed to send confirmation email:', err)
+    const templates = getEventTemplates(event.id);
+    sendConfirmationEmail(event, household, templates.email_subject, templates.email_body).catch(
+      (err) => console.error('Failed to send confirmation email:', err)
     );
 
     return NextResponse.json({ ok: true, householdId: household.id });

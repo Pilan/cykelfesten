@@ -1,6 +1,32 @@
 import { Resend } from 'resend';
 import type { Event, Household } from './types';
 
+let resend: Resend | null = null;
+
+function getResend(): Resend {
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
+
+function interpolate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{([^}]+)\}\}/g, (_, key) => vars[key.trim()] ?? '');
+}
+
+function textToHtml(text: string): string {
+  return `<!DOCTYPE html>
+<html lang="sv">
+<head><meta charset="UTF-8"></head>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333; line-height: 1.6;">
+${text
+  .split('\n')
+  .map((line) => (line.trim() ? `<p style="margin: 4px 0;">${line}</p>` : '<br>'))
+  .join('\n')}
+</body>
+</html>`;
+}
+
 export async function sendVerificationEmail(email: string, link: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
@@ -47,18 +73,11 @@ export async function sendVerificationEmail(email: string, link: string): Promis
   console.log('📧 Verifieringsmail skickat via Resend, id:', result.data?.id);
 }
 
-let resend: Resend | null = null;
-
-function getResend(): Resend {
-  if (!resend) {
-    resend = new Resend(process.env.RESEND_API_KEY);
-  }
-  return resend;
-}
-
 export async function sendConfirmationEmail(
   event: Event,
-  household: Household
+  household: Household,
+  subjectTemplate: string,
+  bodyTemplate: string
 ): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM_EMAIL;
@@ -71,66 +90,33 @@ export async function sendConfirmationEmail(
     day: 'numeric',
   });
 
+  const vars: Record<string, string> = {
+    event_titel: event.title,
+    datum: eventDate,
+    plats: event.location || '–',
+    namn: members.join(', '),
+    adress: household.address,
+    platser: String(household.capacity),
+    specialkost: household.dietary ? `\nSpecialkost: ${household.dietary}` : '',
+  };
+
+  const subject = interpolate(subjectTemplate, vars);
+  const body = interpolate(bodyTemplate, vars);
+
   if (!apiKey || !from) {
     console.log('\n📧 [EMAIL FALLBACK – skickas ej, loggas istället]');
-    console.log(`Till:     ${household.email}`);
-    console.log(`Ämne:     Anmälningsbekräftelse – ${event.title}`);
-    console.log(`Datum:    ${eventDate}`);
-    console.log(`Anmälda: ${members.join(', ')}`);
-    console.log(`Adress:   ${household.address}`);
-    console.log(`Platser:  ${household.capacity}`);
-    if (household.dietary) console.log(`Kost:     ${household.dietary}`);
+    console.log(`Till:  ${household.email}`);
+    console.log(`Ämne:  ${subject}`);
+    console.log(body);
     console.log('──────────────────────────────────────\n');
     return;
   }
 
-  const html = `
-<!DOCTYPE html>
-<html lang="sv">
-<head><meta charset="UTF-8"><title>Anmälningsbekräftelse – ${event.title}</title></head>
-<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
-  <h1 style="color: #16a34a;">🚴 Cykelfesten</h1>
-  <h2>${event.title}</h2>
-  <p>Tack för er anmälan! Här är en sammanfattning:</p>
-  <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-    <tr style="border-bottom: 1px solid #e5e7eb;">
-      <td style="padding: 8px; font-weight: bold; width: 40%;">Datum</td>
-      <td style="padding: 8px;">${eventDate}</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
-      <td style="padding: 8px; font-weight: bold;">Plats</td>
-      <td style="padding: 8px;">${event.location || '–'}</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e5e7eb;">
-      <td style="padding: 8px; font-weight: bold;">Anmälda</td>
-      <td style="padding: 8px;">${members.join(', ')}</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
-      <td style="padding: 8px; font-weight: bold;">Er adress</td>
-      <td style="padding: 8px;">${household.address}</td>
-    </tr>
-    <tr style="border-bottom: 1px solid #e5e7eb;">
-      <td style="padding: 8px; font-weight: bold;">Extra platser</td>
-      <td style="padding: 8px;">${household.capacity} gäster</td>
-    </tr>
-    ${household.dietary ? `
-    <tr style="border-bottom: 1px solid #e5e7eb; background: #f9fafb;">
-      <td style="padding: 8px; font-weight: bold;">Specialkost</td>
-      <td style="padding: 8px;">${household.dietary}</td>
-    </tr>` : ''}
-  </table>
-  <p style="color: #6b7280; font-size: 14px;">
-    Vi återkommer med mer information om vilken rätt ni serverar och vilka hushåll ni besöker.
-  </p>
-  <p style="color: #6b7280; font-size: 14px;">Välkommen på cykelfest! 🚴‍♀️</p>
-</body>
-</html>`;
-
   const result = await getResend().emails.send({
     from,
     to: household.email,
-    subject: `Anmälningsbekräftelse – ${event.title}`,
-    html,
+    subject,
+    html: textToHtml(body),
   });
   if (result.error) {
     console.error('Resend error:', result.error);

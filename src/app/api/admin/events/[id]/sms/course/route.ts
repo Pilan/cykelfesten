@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getEventForAdmin, getHouseholds, getAssignments, markSmsSent } from '@/lib/db';
+import { getEventForAdmin, getHouseholds, getAssignments, markSmsSent, getEventTemplates } from '@/lib/db';
 import { getSession } from '@/lib/auth';
 import { sendHostSms, sendGuestSms } from '@/lib/sms';
 
@@ -33,6 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: 'Lottning ej genomförd.' }, { status: 400 });
     }
 
+    const templates = getEventTemplates(eventId);
     const householdMap = new Map(households.map((h) => [h.id, h]));
     const courseTime = {
       starter: event.starter_time,
@@ -48,10 +49,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
         try {
           if (a.course === course) {
-            // This household is hosting this course
-            await sendHostSms(h.phone, course, courseTime);
+            await sendHostSms(h.phone, course, courseTime, templates.sms_host);
           } else {
-            // This household visits someone for this course
             const visitId =
               course === 'starter'
                 ? a.visits_starter
@@ -62,7 +61,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             if (visitId) {
               const host = householdMap.get(visitId);
               if (host) {
-                await sendGuestSms(h.phone, course, host.address, courseTime);
+                await sendGuestSms(h.phone, course, host.address, courseTime, templates.sms_guest);
               }
             }
           }

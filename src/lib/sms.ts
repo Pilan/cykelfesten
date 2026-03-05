@@ -30,31 +30,43 @@ function courseLabel(course: 'starter' | 'main' | 'dessert'): string {
   return { starter: 'förrätt', main: 'varmrätt', dessert: 'dessert' }[course];
 }
 
+function interpolate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{([^}]+)\}\}/g, (_, key) => vars[key.trim()] ?? '');
+}
+
 export async function sendAdvanceSms(
   phone: string,
   date: string,
   course: 'starter' | 'main' | 'dessert',
   time: string,
   guestCount: number,
-  dietaryList: string[]
+  dietaryList: string[],
+  template: string
 ): Promise<void> {
-  let message =
-    `[Cykelfesten ${date}] Du/ni serverar ${courseLabel(course)} hemma kl ${time}. ` +
-    `Ni tar emot ${guestCount} gästpersoner.`;
-  if (dietaryList.length > 0) {
-    message += ` Specialkost bland gästerna (${dietaryList.length} st): ${dietaryList.join(', ')}.`;
-  }
-  message += ' Mer info kommer dagen för festen!';
+  const specialkost =
+    dietaryList.length > 0
+      ? ` Specialkost bland gästerna (${dietaryList.length} st): ${dietaryList.join(', ')}.`
+      : '';
+  const message = interpolate(template, {
+    datum: date,
+    rätt: courseLabel(course),
+    tid: time,
+    antal_gäster: String(guestCount),
+    specialkost,
+  });
   await sendSms(phone, message);
 }
 
 export async function sendHostSms(
   phone: string,
   course: 'starter' | 'main' | 'dessert',
-  time: string
+  time: string,
+  template: string
 ): Promise<void> {
-  const message =
-    `[Cykelfesten] Du/ni är hemma och tar emot gäster för ${courseLabel(course)} kl ${time}. Välkommen!`;
+  const message = interpolate(template, {
+    rätt: courseLabel(course),
+    tid: time,
+  });
   await sendSms(phone, message);
 }
 
@@ -62,9 +74,13 @@ export async function sendGuestSms(
   phone: string,
   course: 'starter' | 'main' | 'dessert',
   hostAddress: string,
-  time: string
+  time: string,
+  template: string
 ): Promise<void> {
-  const message =
-    `[Cykelfesten] Cykla till ${hostAddress} för ${courseLabel(course)} kl ${time}!`;
+  const message = interpolate(template, {
+    rätt: courseLabel(course),
+    adress: hostAddress,
+    tid: time,
+  });
   await sendSms(phone, message);
 }

@@ -51,6 +51,12 @@ export default function AdminEventPage({ params }: Props) {
         </div>
         <div className="flex gap-2">
           <Link
+            href={`/admin/events/${id}/templates`}
+            className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+          >
+            Mallar
+          </Link>
+          <Link
             href={`/admin/events/${id}/edit`}
             className="text-sm px-3 py-1.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
           >
