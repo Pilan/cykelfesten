@@ -207,6 +207,19 @@ export function createHousehold(data: Omit<Household, 'id' | 'created_at'>): Hou
   return getHousehold(res.lastInsertRowid as number)!;
 }
 
+export function updateHousehold(id: number, data: Partial<Pick<Household, 'members' | 'address' | 'email' | 'phone' | 'capacity' | 'dietary'>>): Household {
+  const current = getHousehold(id);
+  if (!current) throw new Error('Household not found');
+  const merged = { ...current, ...data, id };
+  getDb()
+    .prepare(
+      `UPDATE households SET members=@members, address=@address, email=@email,
+       phone=@phone, capacity=@capacity, dietary=@dietary WHERE id=@id`
+    )
+    .run(merged);
+  return getHousehold(id)!;
+}
+
 export function deleteHousehold(id: number): void {
   getDb().prepare('DELETE FROM households WHERE id = ?').run(id);
 }
