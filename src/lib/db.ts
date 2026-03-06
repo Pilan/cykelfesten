@@ -270,7 +270,13 @@ export function updateHousehold(id: number, data: Partial<Pick<Household, 'membe
 }
 
 export function deleteHousehold(id: number): void {
-  getDb().prepare('DELETE FROM households WHERE id = ?').run(id);
+  const db = getDb();
+  // Null out visit references to this household in other assignments before deleting,
+  // since visits_starter/main/dessert columns lack ON DELETE CASCADE.
+  db.prepare('UPDATE assignments SET visits_starter = NULL WHERE visits_starter = ?').run(id);
+  db.prepare('UPDATE assignments SET visits_main = NULL WHERE visits_main = ?').run(id);
+  db.prepare('UPDATE assignments SET visits_dessert = NULL WHERE visits_dessert = ?').run(id);
+  db.prepare('DELETE FROM households WHERE id = ?').run(id);
 }
 
 // ── Assignments ──────────────────────────────────────────────────────────────
